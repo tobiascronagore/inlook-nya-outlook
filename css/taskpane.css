@@ -1,0 +1,33 @@
+:root { --bg:#fff; --fg:#222; --muted:#666; --line:#eee; --link:#1e5aa0; --ok:#1a7f37; --err:#b3261e; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#1f1f1f; --fg:#f0f0f0; --muted:#b5b5b5; --line:#3a3a3a; --link:#7db7ff; --ok:#5fd07f; --err:#ff8a80; }
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: "Segoe UI", sans-serif; font-size: 14px; margin: 0; padding: 0 10px 14px; }
+section { margin-bottom: 14px; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); margin: 0 -10px 8px; }
+button.tab { flex: 1; margin: 0; border-radius: 0; background: transparent; color: var(--muted);
+  border-bottom: 2px solid transparent; padding: 9px 4px; }
+button.tab.active { color: var(--fg); border-bottom-color: #1e5aa0; font-weight: 600; }
+.label { font-size: 11px; text-transform: uppercase; color: var(--muted); margin: 6px 0 2px; }
+.subject { font-weight: 600; word-break: break-word; }
+.muted { color: var(--muted); font-size: 12px; }
+.status { min-height: 18px; margin-bottom: 8px; font-size: 13px; }
+.status.ok { color: var(--ok); }
+.status.err { color: var(--err); }
+.check { font-size: 13px; margin-right: 12px; }
+input[type=text], textarea, select { width: 100%; box-sizing: border-box; padding: 6px; margin: 4px 0 6px;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 3px; font: inherit; }
+button { display: block; width: 100%; padding: 8px; margin-bottom: 6px; border: 0;
+  background: #1e5aa0; color: #fff; border-radius: 3px; font-size: 14px; cursor: pointer; }
+button.secondary { background: #4b5563; }
+button:disabled { background: #6b7280; color: #ddd; cursor: default; }
+.notes { list-style: none; padding: 0; margin: 8px 0; }
+.notes li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.notes .t { font-weight: 600; }
+.notes .b { white-space: pre-wrap; word-break: break-word; font-size: 13px; }
+.notes button.del { display: inline-block; width: auto; padding: 2px 8px; font-size: 12px; background: transparent; color: var(--err); border: 1px solid var(--line); }
+a { color: var(--link); }
+pre { white-space: pre-wrap; word-break: break-word; background: rgba(128,128,128,.12); padding: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+td, th { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }

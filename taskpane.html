@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inlook</title>
+<link rel="stylesheet" href="css/taskpane.css">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script src="vendor/msal-browser.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/taskpane.js" defer></script>
+</head>
+<body>
+<div class="tabs">
+  <button class="tab active" data-tab="mail">Mejl</button>
+  <button class="tab" data-tab="notes">Anteckningar</button>
+  <button class="tab" data-tab="settings">Inställningar</button>
+</div>
+
+<div id="status" class="status" role="status"></div>
+
+<div id="tab-mail" class="pane">
+  <section>
+    <div class="label">Valt mejl</div>
+    <div id="subject" class="subject">&ndash;</div>
+    <div id="from" class="muted"></div>
+  </section>
+  <section>
+    <div class="label">Skapa uppgift</div>
+    <label class="check"><input type="radio" name="kind" value="jobb" checked> Jobb</label>
+    <label class="check"><input type="radio" name="kind" value="privat"> Privat</label>
+    <input id="task-title" type="text" placeholder="Rubrik">
+    <button id="btn-task">Skapa uppgift (med länk till mejlet)</button>
+  </section>
+  <section>
+    <div class="label">Snabbanteckning</div>
+    <textarea id="note-body" rows="4" placeholder="Anteckning om mejlet"></textarea>
+    <button id="btn-note">Spara anteckning</button>
+  </section>
+</div>
+
+<div id="tab-notes" class="pane" hidden>
+  <button id="btn-reload" class="secondary">Ladda om</button>
+  <ul id="notes" class="notes"></ul>
+  <section>
+    <div class="label">Importera från gamla Inlook (engångs)</div>
+    <div class="muted">Välj <code>notes.json</code> eller <code>dagbok.json</code> från mappen <code>desktop\.data</code>.</div>
+    <input id="import-file" type="file" accept=".json,application/json">
+    <button id="btn-import" class="secondary">Importera vald fil</button>
+  </section>
+</div>
+
+<div id="tab-settings" class="pane" hidden>
+  <section>
+    <div class="label">Lista för Jobb</div>
+    <select id="list-jobb"></select>
+    <div class="label">Lista för Privat</div>
+    <select id="list-privat"></select>
+    <div class="muted">Listorna är dina vanliga Microsoft To Do-listor.</div>
+  </section>
+  <section>
+    <a href="diag.html">Förprov: behörigheter och inloggning</a>
+  </section>
+</div>
+</body>
+</html>
