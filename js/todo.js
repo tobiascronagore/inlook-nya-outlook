@@ -77,6 +77,42 @@
     return lists[0] || null;
   }
 
+  // ---------- Normalisering av todo.json ----------
+  // Stöder både färdigt format (tasks) och rå To Do-utdata per lista (tasksByList).
+  function asArray(x) { return Array.isArray(x) ? x : (x && Array.isArray(x.value) ? x.value : []); }
+  function str(x) { return typeof x === "string" ? x : (x && typeof x === "object" ? str(x.dateTime || x.content || "") : ""); }
+  function ts(x) { // Graph ger ofta UTC utan tidszon ("2026-11-20T00:00:00.0000000")
+    var s = str(x); if (!s) return NaN;
+    return Date.parse(/(Z|[+-]\d\d:?\d\d)$/.test(s) ? s : s + "Z");
+  }
+  function mapTask(t, listId) {
+    t = t || {};
+    var body = str(t.body);
+    return { id: t.id || "", listId: listId || t.listId || "", title: t.title || t.subject || "",
+      status: String(t.status || "").toLowerCase() === "completed" ? "completed" : "notStarted",
+      dueDateTime: str(t.dueDateTime), importance: String(t.importance || "normal").toLowerCase(),
+      body: body.length > 600 ? body.slice(0, 600) : body,
+      createdAt: str(t.createdDateTime || t.createdAt), completedDateTime: str(t.completedDateTime) };
+  }
+  function normalizeTodo(todo, now) {
+    if (!todo || !Array.isArray(todo.lists)) return todo;
+    now = now || Date.now();
+    var all = [];
+    asArray(todo.tasks).forEach(function (t) { all.push(mapTask(t)); });
+    asArray(todo.tasksByList).forEach(function (g) {
+      asArray(g && g.tasks).forEach(function (t) { all.push(mapTask(t, g.listId)); });
+    });
+    var seen = {};
+    var tasks = all.filter(function (t) {
+      if (!t.id || seen[t.id]) return false;
+      seen[t.id] = true;
+      if (t.status !== "completed") return true;
+      var c = ts(t.completedDateTime);
+      return isNaN(c) || now - c <= 7 * DAY; // okänd klartid: visa hellre än dölj
+    });
+    return Object.assign({}, todo, { tasks: tasks });
+  }
+
   // ---------- Lagring av väntande kommandon (lokalt i webbläsaren) ----------
   function loadPending() {
     try { return JSON.parse(root.localStorage.getItem(KEY) || "[]"); } catch (e) { return []; }
@@ -126,7 +162,7 @@
   async function load() {
     var G = root.InlookGraph, now = Date.now();
     var r = await G.readJson("todo.json");
-    var todo = r.data && Array.isArray(r.data.lists) ? r.data : null;
+    var todo = r.data && Array.isArray(r.data.lists) ? normalizeTodo(r.data, now) : null;
     var files = await G.listFolder("kvitton");
     var receipts = {};
     files.forEach(function (f) {
@@ -143,7 +179,7 @@
     return { todo: todo, pending: pending, created: created, syncedAt: todo ? todo.generatedAt : "" };
   }
 
-  root.InlookTodo = { resolvePending: resolvePending, buildRows: buildRows, pickList: pickList, firstLink: firstLink,
+  root.InlookTodo = { normalizeTodo: normalizeTodo, resolvePending: resolvePending, buildRows: buildRows, pickList: pickList, firstLink: firstLink,
     send: send, load: load, loadPending: loadPending, savePending: savePending,
     loadCreated: loadCreated, updateCreated: updateCreated };
   if (typeof module !== "undefined") module.exports = root.InlookTodo;

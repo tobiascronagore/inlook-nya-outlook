@@ -166,3 +166,11 @@ så panelen blir uppdaterad inom någon minut i stället för efter upp till fem
 - Kommando ligger kvar i `inkorg`: flöde 1 har misslyckats (se körhistorik) eller är avstängt.
 - "Skapa fil" i flöde 1 säger att filen finns: kommando-id används två gånger (ska inte hända); ta bort kvittot.
 - Gamla kvitton (över 3 dygn) städas av panelen automatiskt.
+
+## Förenklad flöde 2 (utan Välj/union) - stöds av tillägget
+
+Inne i För varje lista: "Lista att göra-uppgifter", sedan "Lägg till i matrisvariabel" `alla` med värdet
+`{"listId": <listans Id>, "tasks": <Brödtext från list-uppgifter-åtgärden>}`. Efter loopen "Uppdatera fil" med
+`{"generatedAt":"…","lists":[{"id":"…","name":"…"}],"tasksByList": <alla>}`. Tillägget plattar ut och mappar rå To Do-utdata
+(id, title, status, dueDateTime, importance, body, createdDateTime, completedDateTime), visar öppna uppgifter samt klara
+senaste 7 dygnen. Det gamla formatet med färdig `tasks`-lista fungerar fortfarande.

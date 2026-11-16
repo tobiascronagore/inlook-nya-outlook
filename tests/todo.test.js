@@ -108,6 +108,27 @@ const step = ms => { clock += ms; };
   td.tasks[0] = { id: "X", listId: "L1", title: c0.title }; assert.equal(T.updateCreated(st.created, td, {}, clock).length, 1);
   step(8 * 86400000); st = await T.load(); assert.equal(st.created.length, 0); // 7 dygn
 
+  // 6c. Rå To Do-utdata (tasksByList), både array och {value:[]}, gammalt tasks-format
+  const nowMs = clock, iso = d => new Date(nowMs - d * 86400000).toISOString().replace("Z", "0000");
+  const raw = { generatedAt: now(), lists: [{ id: "L1", name: "Jobb" }, { id: "L4", name: "Flagged Emails" }], tasksByList: [
+    { listId: "L1", tasks: { value: [
+      { id: "a", title: "Öppen", status: "notStarted", importance: "High", body: { content: "Öppna mejlet: https://x.se/a", contentType: "text" },
+        dueDateTime: { dateTime: "2026-11-20T00:00:00.0000000", timeZone: "UTC" }, createdDateTime: iso(1) },
+      { id: "b", title: "Klar ny", status: "Completed", completedDateTime: { dateTime: iso(2), timeZone: "UTC" }, body: { content: "x".repeat(900) } },
+      { id: "c", title: "Klar gammal", status: "completed", completedDateTime: { dateTime: iso(9), timeZone: "UTC" } } ] } },
+    { listId: "L4", tasks: [ { id: "d", title: "Flaggat", status: "inProgress", dueDateTime: "2026-12-01T00:00:00Z", body: "text" } ] } ],
+    tasks: [ { id: "e", listId: "L1", title: "Gammalt format", status: "notStarted" } ] };
+  const nt = T.normalizeTodo(raw, nowMs);
+  assert.deepEqual(nt.tasks.map(x => x.id).sort(), ["a", "b", "d", "e"]);
+  const ta = nt.tasks.find(x => x.id === "a"); assert.equal(ta.listId, "L1"); assert.equal(ta.dueDateTime.slice(0, 10), "2026-11-20"); assert.equal(ta.importance, "high");
+  assert.equal(nt.tasks.find(x => x.id === "b").status, "completed"); assert.equal(nt.tasks.find(x => x.id === "b").body.length, 600);
+  assert.equal(nt.tasks.find(x => x.id === "d").listId, "L4");
+  rows = T.buildRows(nt, [], { showDone: false }); assert.deepEqual(rows.map(r => r.id).sort(), ["a", "d", "e"]);
+  assert.equal(T.buildRows(nt, [], { showDone: true }).length, 4);
+  assert.equal(T.buildRows(nt, [], { listId: "L4" })[0].listName, "Flagged Emails");
+  assert.equal(T.buildRows(nt, [], {}).find(r => r.id === "a").link, "https://x.se/a");
+  put("todo.json", JSON.stringify(raw)); st = await T.load(); assert.equal(st.todo.tasks.length, 4); // via load()
+
   // 7. Listfilter + tom todo.json
   assert.equal(T.buildRows(st.todo, [], { listId: "L2" }).length, 0);
   assert.equal(T.buildRows(null, []).length, 0);
