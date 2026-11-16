@@ -1,44 +1,109 @@
-// Inloggning via MSAL.js. I Outlook används NAA (nested app authentication):
-// Outlook förmedlar token åt tillägget, ingen server och ingen hemlighet.
-// Utanför Outlook (vanlig webbläsare) faller MSAL tillbaka på vanlig popup-
-// inloggning, vilket är praktiskt för att prova Graph-delen separat.
+// Inloggning via MSAL.js. Första val: NAA (nested app authentication), där
+// Outlook förmedlar token åt tillägget. Om NAA inte finns eller misslyckas av
+// annat skäl än medgivande används en fallback: Office Dialog API öppnar
+// dialog.html (samma origin) som loggar in med MSAL redirect och skickar
+// tillbaka token i minnet. Inga hemligheter; allt är publik klient.
 (function () {
   var cfg = window.INLOOK_CONFIG;
-  var pcaPromise = null;
-  var account = null;
+  var BASE = window.location.origin + window.location.pathname.replace(/[^/]*$/, "");
+  var DIALOG_URL = BASE + "dialog.html";
+  var pcaPromise = null, account = null;
+  var mem = {};            // scope-nyckel -> {token, exp, scp}
+  var lastInfo = { mode: "", scp: "" };
+
+  function decodeScp(token) {
+    try {
+      var p = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      return p.scp || "";
+    } catch (e) { return ""; }
+  }
 
   function getPca() {
     if (!pcaPromise) {
       pcaPromise = msal.createNestablePublicClientApplication({
-        auth: {
-          clientId: cfg.clientId,
-          authority: cfg.authority,
-          supportsNestedAppAuth: true,
-          redirectUri: window.location.origin + window.location.pathname.replace(/[^/]*$/, "")
-        },
+        auth: { clientId: cfg.clientId, authority: cfg.authority, supportsNestedAppAuth: true, redirectUri: BASE },
         cache: { cacheLocation: "localStorage" }
       });
     }
     return pcaPromise;
   }
 
-  // Ger en token för EXAKT de scopes som anges. Medgivande (consent) frågas
-  // först när scopet behövs, och tenantens regler avgör om användaren själv
-  // får godkänna eller om administratör krävs (felkod visas då i klartext).
-  async function getToken(scopes) {
+  function isAdminErr(e) {
+    var m = (e && (e.errorMessage || e.message)) || String(e);
+    return /AADSTS(65001|90094|90008|650057|90093|65002)/.test(m);
+  }
+
+  async function viaNaa(scopes) {
     var pca = await getPca();
     var req = { scopes: scopes };
     if (account) req.account = account;
     var res;
-    try {
-      res = await pca.acquireTokenSilent(req);
-    } catch (e) {
-      // Ingen cachad token / medgivande saknas -> interaktivt.
+    try { res = await pca.acquireTokenSilent(req); }
+    catch (e) {
+      if (isAdminErr(e)) throw e;
       res = await pca.acquireTokenPopup(req);
     }
     account = res.account || account;
-    return res.accessToken;
+    return { token: res.accessToken, exp: res.expiresOn ? +new Date(res.expiresOn) : Date.now() + 3000000 };
   }
 
-  window.InlookAuth = { getToken: getToken, getPca: getPca };
+  // Fallback: Office-dialog -> dialog.html (MSAL redirect) -> token via messageParent.
+  function viaDialog(scopes) {
+    return new Promise(function (resolve, reject) {
+      if (!(window.Office && Office.context && Office.context.ui && Office.context.ui.displayDialogAsync)) {
+        return reject(new Error("Office Dialog API finns inte här."));
+      }
+      var url = DIALOG_URL + "?scopes=" + encodeURIComponent(scopes.join(" "));
+      Office.context.ui.displayDialogAsync(url, { height: 60, width: 30 }, function (r) {
+        if (r.status !== Office.AsyncResultStatus.Succeeded) {
+          return reject(new Error("Dialogen kunde inte öppnas: " + (r.error && r.error.message) + " (kod " + (r.error && r.error.code) + ")"));
+        }
+        var dlg = r.value, done = false;
+        function finish(fn, v) { if (!done) { done = true; try { dlg.close(); } catch (e) { /* stängd */ } fn(v); } }
+        dlg.addEventHandler(Office.EventType.DialogMessageReceived, function (a) {
+          var m; try { m = JSON.parse(a.message); } catch (e) { return finish(reject, new Error("Ogiltigt dialogsvar")); }
+          if (m.ok) finish(resolve, { token: m.token, exp: m.exp || Date.now() + 3000000 });
+          else finish(reject, new Error(m.error || "Inloggning misslyckades"));
+        });
+        dlg.addEventHandler(Office.EventType.DialogEventReceived, function (a) {
+          finish(reject, new Error("Dialogen stängdes eller fick fel (kod " + a.error + ")"));
+        });
+      });
+    });
+  }
+
+  function withTimeout(p, ms, what) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { rej(new Error(what + " svarade inte inom " + Math.round(ms / 1000) + " s")); }, ms);
+      p.then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); });
+    });
+  }
+
+  var naaBroken = false; // sätts om NAA saknas/hänger, så vi inte väntar igen
+
+  // Token för EXAKT de scopes som anges (inkrementellt medgivande).
+  async function getToken(scopes) {
+    var key = scopes.slice().sort().join(" ");
+    var c = mem[key];
+    if (c && c.exp - Date.now() > 120000) { lastInfo = { mode: c.mode, scp: c.scp }; return c.token; }
+    var r, mode;
+    if (!naaBroken) {
+      try { r = await withTimeout(viaNaa(scopes), 120000, "NAA"); mode = "NAA"; }
+      catch (e) {
+        if (isAdminErr(e)) throw e;
+        var m = (e && (e.errorMessage || e.message)) || "";
+        // Avbruten av användaren är inget NAA-fel; övriga fel -> fallback.
+        if (/user_cancelled/i.test(e && e.errorCode || "")) throw e;
+        naaBroken = true;
+        lastInfo.naaError = (e && e.errorCode ? e.errorCode + ": " : "") + m;
+      }
+    }
+    if (!r) { r = await viaDialog(scopes); mode = "dialog"; }
+    var scp = decodeScp(r.token);
+    mem[key] = { token: r.token, exp: r.exp, scp: scp, mode: mode };
+    lastInfo = { mode: mode, scp: scp, naaError: lastInfo.naaError };
+    return r.token;
+  }
+
+  window.InlookAuth = { getToken: getToken, getPca: getPca, info: function () { return lastInfo; } };
 })();

@@ -53,31 +53,58 @@
     { n: "Calendars.ReadWrite", s: ["Calendars.ReadWrite"], f: async function () { return (await G(["Calendars.ReadWrite"], "GET", "/me/calendars?$top=1&$select=id")).status; } }
   ];
 
-  async function run() {
-    $("run").disabled = true;
+  async function run(only) {
+    $("run").disabled = true; $("run1").disabled = true;
     $("out").tBodies[0].innerHTML = ""; lines = [];
-    var inOffice = !!(window.Office && Office.context && Office.context.mailbox);
-    log("Datum: " + new Date().toISOString().slice(0, 10));
-    log("Office-värd: " + (inOffice ? ((Office.context.mailbox.diagnostics || {}).hostName || "okänd") + " " + ((Office.context.mailbox.diagnostics || {}).hostVersion || "") : "ingen (vanlig webbläsare)"));
-    if (inOffice && Office.context.requirements) {
-      log("NestedAppAuth 1.1 stöds: " + Office.context.requirements.isSetSupported("NestedAppAuth", "1.1"));
-      log("Mailbox 1.8 stöds: " + Office.context.requirements.isSetSupported("Mailbox", "1.8"));
-      var it = Office.context.mailbox.item;
-      log("Mejl-id tillgängligt: " + !!(it && it.itemId));
-    }
-    for (var i = 0; i < tests.length; i++) {
-      var t = tests[i];
-      try {
-        var res = await t.f();
-        var ok = (typeof res === "number") ? (res >= 200 && res < 300) : !/^skriv \d|fel/.test(String(res));
-        row(t.n, "token OK; Graph: " + res, ok);
-      } catch (e) {
-        row(t.n, explain(e), false);
+    try {
+      log("Datum: " + new Date().toISOString().slice(0, 10));
+      var inOffice = !!(window.Office && Office.context && Office.context.mailbox);
+      log("Office-värd: " + (inOffice ? ((Office.context.mailbox.diagnostics || {}).hostName || "okänd") + " " + ((Office.context.mailbox.diagnostics || {}).hostVersion || "") : "ingen (vanlig webbläsare)"));
+      if (inOffice && Office.context.requirements) {
+        log("NestedAppAuth 1.1 stöds: " + Office.context.requirements.isSetSupported("NestedAppAuth", "1.1"));
+        log("Mailbox 1.8 stöds: " + Office.context.requirements.isSetSupported("Mailbox", "1.8"));
+        var it = Office.context.mailbox.item;
+        log("Mejl-id tillgängligt: " + !!(it && it.itemId));
       }
-    }
-    log("Klart. Kopiera hela rapporten ovan.");
-    $("run").disabled = false;
+      log("Dialog API stöds: " + !!(window.Office && Office.context && Office.context.ui && Office.context.ui.displayDialogAsync));
+      var list = only ? tests.slice(0, 1) : tests;
+      for (var i = 0; i < list.length; i++) {
+        var t = list[i];
+        try {
+          // Varje test har egen tidsgräns så att en hängd inloggning syns.
+          var res = await new Promise(function (ok, no) {
+            var h = setTimeout(function () { no(new Error("Ingen respons inom 150 s (hängd inloggning/popup?)")); }, 150000);
+            t.f().then(function (v) { clearTimeout(h); ok(v); }, function (e) { clearTimeout(h); no(e); });
+          });
+          var okk = (typeof res === "number") ? (res >= 200 && res < 300) : !/^skriv \d|fel/.test(String(res));
+          var inf = InlookAuth.info();
+          row(t.n, "token OK via " + inf.mode + "; Graph: " + res, okk);
+          if (inf.scp) log("  scp (redan medgivna för Graph): " + inf.scp);
+          if (inf.naaError) log("  NAA-fel (fallback användes): " + inf.naaError);
+        } catch (e) {
+          var inf2 = InlookAuth.info();
+          row(t.n, explain(e) + " | " + String((e && (e.errorMessage || e.message)) || e).slice(0, 300), false);
+          if (inf2.naaError) log("  NAA-fel: " + inf2.naaError);
+        }
+      }
+      log("Klart. Kopiera hela rapporten ovan.");
+    } catch (e) { log("FEL I FÖRPROVET: " + (e && e.message || e)); }
+    $("run").disabled = false; $("run1").disabled = false;
   }
 
-  Office.onReady(function () { $("run").onclick = run; });
+  // Alla fel som annars sväljs ska synas i rapporten.
+  window.addEventListener("error", function (ev) { log("JS-fel: " + ev.message + " (" + (ev.filename || "").split("/").pop() + ":" + ev.lineno + ")"); });
+  window.addEventListener("unhandledrejection", function (ev) { var r = ev.reason; log("Ohanterat löftesfel: " + ((r && (r.errorMessage || r.message)) || r)); });
+
+  // Knapparna kopplas direkt, inte först i Office.onReady, som kan utebli.
+  function init() {
+    $("run").onclick = function () { run(false); };
+    $("run1").onclick = function () { run(true); };
+    log("Sidan laddad. msal: " + (typeof msal) + ", Office: " + (typeof Office));
+    if (window.Office && Office.onReady) {
+      var t = setTimeout(function () { log("Office.onReady kom inte inom 5 s (fortsätter ändå)."); }, 5000);
+      Office.onReady(function (i) { clearTimeout(t); log("Office.onReady: host=" + (i && i.host) + ", plattform=" + (i && i.platform)); });
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();

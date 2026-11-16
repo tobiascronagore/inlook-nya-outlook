@@ -17,9 +17,10 @@ Microsoft To Do. Ingenting ligger i det här repot.
    "Ägda program"). Öppna appen vars klient-ID står i `js/config.js` (samma
    registrering som OneNote-inloggningen i Inlook använder).
 3. **Autentisering** > **Lägg till en plattform** > **Ensidesprogram (SPA)**.
-4. Lägg till dessa två omdirigerings-URI:er (en i taget, spara):
+4. Lägg till dessa tre omdirigerings-URI:er (en i taget, spara):
    - `brk-multihub://tobiascronagore.github.io`
    - `https://tobiascronagore.github.io/inlook-nya-outlook/`
+   - `https://tobiascronagore.github.io/inlook-nya-outlook/dialog.html` (reservinloggning via Office-dialog, används om NAA inte fungerar)
 5. Spara. Ändra inget annat. (Befintliga inställningar för OneNote lämnas orörda.)
 
 Kan du inte öppna appen eller inte spara (du är inte ägare)? Då får du skapa en
@@ -32,9 +33,8 @@ spärrad för dig är det en gräns jag inte ska gå runt; säg till så tar vi 
 
 1. Öppna https://aka.ms/olksideload i webbläsaren (eller i Outlook: Hämta
    tillägg > **Mina tillägg** > **Anpassade tillägg**).
-2. **Lägg till ett anpassat tillägg** > **Lägg till från URL** och klistra in
-   `https://tobiascronagore.github.io/inlook-nya-outlook/manifest.xml`
-   (alternativt ladda ner manifest.xml och välj **Lägg till från fil**).
+2. **Lägg till ett anpassat tillägg** > **Lägg till från fil** och välj manifest.xml (ladda ner den från
+   `https://tobiascronagore.github.io/inlook-nya-outlook/manifest.xml`; "Lägg till från URL" är spärrat i Skandglas tenant).
 3. Bekräfta varningen. Öppna ett mejl: knappen **Inlook (moln)** finns i
    menyfliken (under `...` om den är dold). Klicka, fäst panelen med nålen.
 4. Om sidladdning är blockerad ("Lägg till anpassat tillägg" saknas eller
