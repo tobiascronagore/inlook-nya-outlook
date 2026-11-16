@@ -1,4 +1,4 @@
-// Graph-anrop mot användarens eget konto: To Do och OneDrive-mappen "Inlook".
+// Graph-anrop mot användarens eget konto: OneDrive-mappen "Inlook" (anteckningar och To Do-kommandon).
 (function () {
   var cfg = window.INLOOK_CONFIG;
   var BASE = "https://graph.microsoft.com/v1.0";
@@ -35,8 +35,18 @@
   }
 
   // ---------- OneDrive-JSON ----------
+  // name kan innehålla undermappar ("inkorg/cmd-1.json"); varje del kodas för sig.
   function filePath(name) {
-    return "/me/drive/root:/" + encodeURIComponent(cfg.driveFolder) + "/" + encodeURIComponent(name);
+    return "/me/drive/root:/" + encodeURIComponent(cfg.driveFolder) + "/" +
+      String(name).split("/").map(encodeURIComponent).join("/");
+  }
+
+  // Lista filer i en undermapp: [{name, modified}]. Saknas mappen: tom lista.
+  async function listFolder(name) {
+    var res = await call(S_FILES, "GET", filePath(name) + ":/children?$select=name,lastModifiedDateTime&$top=200");
+    if (res.status === 404) return [];
+    await mustOk(res, "Lista " + name);
+    return ((await res.json()).value || []).map(function (f) { return { name: f.name, modified: f.lastModifiedDateTime }; });
   }
 
   // Returnerar {data, etag}; data=null om filen inte finns. ETag hämtas FÖRE
@@ -128,61 +138,10 @@
     return added;
   }
 
-  // ---------- Uppgifter (egen lista i tasks.json, ingen To Do/Tasks-behörighet) ----------
-  // Post: {id, title, kind: "jobb"|"privat", done, due: "YYYY-MM-DD"|"", link, notes, created, updated, doneAt}
-  async function loadTasks() {
-    var r = await readJson("tasks.json");
-    return Array.isArray(r.data) ? r.data : [];
-  }
-
-  async function mutateTasks(fn) {
-    for (var attempt = 0; attempt < 2; attempt++) {
-      var r = await readJson("tasks.json");
-      var list = fn(Array.isArray(r.data) ? r.data : []);
-      try { await writeJson("tasks.json", list, r.etag); return list; }
-      catch (e) { if (e.status !== 412 || attempt === 1) throw e; }
-    }
-  }
-
-  function addTask(t) {
-    return mutateTasks(function (list) {
-      list.push({ id: newId(), title: t.title || "(namnlös)", kind: t.kind === "privat" ? "privat" : "jobb",
-        done: false, due: t.due || "", link: t.link || "", notes: t.notes || "",
-        created: nowStamp(), updated: nowStamp(), doneAt: "" });
-      return list;
-    });
-  }
-
-  function updateTask(id, patch) {
-    return mutateTasks(function (list) {
-      list.forEach(function (x) {
-        if (x.id !== id) return;
-        Object.assign(x, patch, { updated: nowStamp() });
-        x.doneAt = x.done ? (x.doneAt || nowStamp()) : "";
-      });
-      return list;
-    });
-  }
-
-  function deleteTask(id) {
-    return mutateTasks(function (list) { return list.filter(function (x) { return x.id !== id; }); });
-  }
-
-  // Engångsimport från en tasks.json med samma fält; slår ihop på id.
-  async function importTasks(incoming) {
-    var added = 0;
-    await mutateTasks(function (list) {
-      var have = {}; list.forEach(function (x) { have[x.id] = true; });
-      incoming.forEach(function (x) { if (x && x.id && x.title && !have[x.id]) { list.push(x); added++; } });
-      return list;
-    });
-    return added;
-  }
-
   window.InlookGraph = {
     readJson: readJson, writeJson: writeJson, deleteFile: deleteFile,
     loadNotes: loadNotes, addNote: addNote, deleteNote: deleteNote, importNotes: importNotes,
-    loadTasks: loadTasks, addTask: addTask, updateTask: updateTask, deleteTask: deleteTask, importTasks: importTasks,
+    listFolder: listFolder, newId: newId, nowStamp: nowStamp,
     call: call
   };
 })();

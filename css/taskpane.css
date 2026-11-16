@@ -31,3 +31,4 @@ a { color: var(--link); }
 pre { white-space: pre-wrap; word-break: break-word; background: rgba(128,128,128,.12); padding: 8px; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
 td, th { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+.badge { color: var(--err); font-size: 12px; }

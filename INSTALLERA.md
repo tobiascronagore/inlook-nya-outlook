@@ -7,7 +7,7 @@ COM, ingen IT-inblandning. Det kan finnas parallellt med det lokala tillägget
 
 Adress: https://tobiascronagore.github.io/inlook-nya-outlook/
 
-Data: uppgifter (`tasks.json`), anteckningar (`notes.json`) och dagbok
+Data: anteckningar (`notes.json`) och dagbok
 (`dagbok.json`) som JSON i OneDrive-mappen `Inlook`. Ingenting ligger i det här repot.
 
 Behörigheter (provade i Skandglas tenant): User.Read, Files.ReadWrite, Notes.Read/ReadWrite
@@ -70,3 +70,8 @@ spärrad för dig är det en gräns jag inte ska gå runt; säg till så tar vi 
 - Panelen tom: kontrollera att https://tobiascronagore.github.io/inlook-nya-outlook/taskpane.html
   öppnas i webbläsaren, och att GitHub Pages hunnit publicera (några minuter).
 - Ny version: ladda om panelen; stäng och öppna den om det inte hjälper.
+
+## Uppgifter = riktiga Microsoft To Do (Power Automate)
+
+Fliken Uppgifter använder To Do via två flöden i din Power Automate. Bygg dem enligt `FLODEN.md`
+(mapparna `inkorg` och `kvitton` samt filen `todo.json` i OneDrive/Inlook).

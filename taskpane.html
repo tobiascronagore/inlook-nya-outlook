@@ -5,13 +5,14 @@
 <meta http-equiv="Cache-Control" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Inlook</title>
-<link rel="stylesheet" href="css/taskpane.css?v=20261116d">
+<link rel="stylesheet" href="css/taskpane.css?v=20261116e">
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-<script src="vendor/msal-browser.min.js?v=20261116d"></script>
-<script src="js/config.js?v=20261116d"></script>
-<script src="js/auth.js?v=20261116d"></script>
-<script src="js/graph.js?v=20261116d"></script>
-<script src="js/taskpane.js?v=20261116d" defer></script>
+<script src="vendor/msal-browser.min.js?v=20261116e"></script>
+<script src="js/config.js?v=20261116e"></script>
+<script src="js/auth.js?v=20261116e"></script>
+<script src="js/graph.js?v=20261116e"></script>
+<script src="js/todo.js?v=20261116e"></script>
+<script src="js/taskpane.js?v=20261116e" defer></script>
 </head>
 <body>
 <div class="tabs">
@@ -31,8 +32,8 @@
   </section>
   <section>
     <div class="label">Skapa uppgift</div>
-    <label class="check"><input type="radio" name="kind" value="jobb" checked> Jobb</label>
-    <label class="check"><input type="radio" name="kind" value="privat"> Privat</label>
+    <label class="label" for="task-list">To Do-lista</label>
+    <select id="task-list"></select>
     <input id="task-title" type="text" placeholder="Rubrik">
     <div class="label">Förfallodatum (valfritt)</div>
     <input id="task-due" type="date">
@@ -50,7 +51,7 @@
   <ul id="notes" class="notes"></ul>
   <section>
     <div class="label">Importera från gamla Inlook (engångs)</div>
-    <div class="muted">Välj <code>notes.json</code>, <code>dagbok.json</code> eller en <code>tasks.json</code> från mappen <code>desktop\.data</code>.</div>
+    <div class="muted">Välj <code>notes.json</code> eller <code>dagbok.json</code> från mappen <code>desktop\.data</code>.</div>
     <input id="import-file" type="file" accept=".json,application/json">
     <button id="btn-import" class="secondary">Importera vald fil</button>
   </section>
@@ -58,15 +59,15 @@
 
 <div id="tab-tasks" class="pane" hidden>
   <section>
-    <label class="check"><input type="radio" name="filt" value="alla" checked> Alla</label>
-    <label class="check"><input type="radio" name="filt" value="jobb"> Jobb</label>
-    <label class="check"><input type="radio" name="filt" value="privat"> Privat</label>
+    <select id="filt-list"><option value="">Alla listor</option></select>
     <label class="check"><input type="checkbox" id="show-done"> Visa klara</label>
     <button id="btn-tasks-reload" class="secondary">Ladda om</button>
+    <div id="sync-info" class="muted"></div>
     <ul id="tasks" class="notes"></ul>
   </section>
   <section>
     <div class="label">Ny uppgift utan mejl</div>
+    <select id="nt-list"></select>
     <input id="nt-title" type="text" placeholder="Rubrik">
     <button id="btn-nt">Lägg till</button>
   </section>
@@ -74,12 +75,12 @@
 
 <div id="tab-settings" class="pane" hidden>
   <section>
-    <div class="muted">Uppgifter och anteckningar sparas som JSON i din OneDrive-mapp <code>Inlook</code>. Kalender och mejl-behörigheter används inte (kräver administratör).</div>
+    <div class="muted">Uppgifter är riktiga Microsoft To Do via Power Automate-flöden (se FLODEN.md): tillägget skriver kommandofiler till OneDrive-mappen <code>Inlook/inkorg</code> och läser <code>todo.json</code>. Anteckningar sparas som JSON i samma mapp. Kalender och mejl-behörigheter används inte (kräver administratör).</div>
   </section>
   <section>
-    <a href="diag.html?v=20261116d">Förprov: behörigheter och inloggning</a>
+    <a href="diag.html?v=20261116e">Förprov: behörigheter och inloggning</a>
   </section>
 </div>
-<div class="muted" id="ver">Version 20261116d</div>
+<div class="muted" id="ver">Version 20261116e</div>
 </body>
 </html>
