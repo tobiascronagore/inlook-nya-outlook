@@ -4,19 +4,28 @@
   var lists = [];
   var current = { subject: "", from: "", link: "" };
 
-  function status(msg, kind) {
+  function status(msg, kind, details) {
     var el = $("status");
     el.textContent = msg || "";
     el.className = "status" + (kind ? " " + kind : "");
+    if (details) {
+      var d = document.createElement("details");
+      var sm = document.createElement("summary"); sm.textContent = "Visa detaljer";
+      var pre = document.createElement("pre"); pre.textContent = details;
+      d.append(sm, pre); el.appendChild(d);
+    }
   }
 
-  // Visar ett begripligt fel; tenantens medgivandekrav får en egen förklaring.
+  // Kort, begripligt fel; rå text (max 500 tecken) bakom "Visa detaljer".
   function fail(e) {
-    var m = (e && e.message) || String(e);
-    if (/AADSTS(65001|90094|65002|650057)|admin|consent_required|interaction_required/i.test(m)) {
-      m = "Medgivande saknas eller kräver administratör: " + m;
-    }
-    status(m, "err");
+    var raw = String((e && (e.errorMessage || e.message)) || e);
+    var code = (raw.match(/AADSTS\d+/) || [])[0] || (e && e.errorCode) || "";
+    var msg;
+    if (InlookAuth.isAdminErr(e)) msg = "Den här behörigheten kräver administratörsgodkännande i din organisation.";
+    else if (/user_cancelled|AADSTS65004/i.test(raw + (e && e.errorCode || ""))) msg = "Inloggningen avbröts.";
+    else if (/AADSTS65001|consent_required|interaction_required/i.test(raw)) msg = "Medgivande saknas. Klicka igen och godkänn i fönstret som visas.";
+    else msg = "Något gick fel" + (code ? " (" + code + ")" : "") + ".";
+    status(msg, "err", raw.length > 500 ? raw.slice(0, 500) + "…" : raw);
   }
 
   // Länk som öppnar mejlet i Outlook på webben. Bygger bara på item-id från
@@ -162,7 +171,6 @@
     ["mail", "notes", "settings"].forEach(function (t) { $("tab-" + t).hidden = (t !== name); });
     status("");
     if (name === "notes") loadNotes();
-    if (name === "settings") ensureLists().catch(fail);
   }
 
   Office.onReady(function () {
@@ -170,6 +178,9 @@
     $("btn-task").onclick = onTask;
     $("btn-note").onclick = onNote;
     $("btn-reload").onclick = loadNotes;
+    $("btn-lists").onclick = async function () {
+      try { status("Loggar in och hämtar listor…"); await ensureLists(); status("Listor hämtade.", "ok"); } catch (e) { fail(e); }
+    };
     $("btn-import").onclick = onImport;
     readItem();
     // Fastnålad panel: uppdatera när användaren byter mejl.

@@ -30,7 +30,9 @@
 
   function isAdminErr(e) {
     var m = (e && (e.errorMessage || e.message)) || String(e);
-    return /AADSTS(65001|90094|90008|650057|90093|65002)/.test(m);
+    // Bara tydliga admin-krav. AADSTS65001/consent_required betyder "medgivande saknas"
+    // och ska leda till ett interaktivt anrop, inte klassas som admin.
+    return /AADSTS(90094|90008)|needs admin approval|admin.{0,20}approv/i.test(m);
   }
 
   async function viaNaa(scopes) {
@@ -41,6 +43,7 @@
     try { res = await pca.acquireTokenSilent(req); }
     catch (e) {
       if (isAdminErr(e)) throw e;
+      // Tyst försök räcker inte (medgivande/inloggning saknas): fråga användaren.
       res = await pca.acquireTokenPopup(req);
     }
     account = res.account || account;
@@ -53,7 +56,7 @@
       if (!(window.Office && Office.context && Office.context.ui && Office.context.ui.displayDialogAsync)) {
         return reject(new Error("Office Dialog API finns inte här."));
       }
-      var url = DIALOG_URL + "?v=20261116b&scopes=" + encodeURIComponent(scopes.join(" "));
+      var url = DIALOG_URL + "?v=20261116c&scopes=" + encodeURIComponent(scopes.join(" "));
       Office.context.ui.displayDialogAsync(url, { height: 60, width: 30 }, function (r) {
         if (r.status !== Office.AsyncResultStatus.Succeeded) {
           return reject(new Error("Dialogen kunde inte öppnas: " + (r.error && r.error.message) + " (kod " + (r.error && r.error.code) + ")"));
@@ -105,5 +108,5 @@
     return r.token;
   }
 
-  window.InlookAuth = { getToken: getToken, getPca: getPca, info: function () { return lastInfo; } };
+  window.InlookAuth = { isAdminErr: isAdminErr, getToken: getToken, getPca: getPca, info: function () { return lastInfo; } };
 })();

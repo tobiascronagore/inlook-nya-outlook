@@ -18,9 +18,9 @@
   function explain(e) {
     var m = (e && (e.errorMessage || e.message)) || String(e);
     var code = ((m.match(/AADSTS\d+/) || [])[0]) || (e && e.errorCode) || "";
-    var admin = /AADSTS(65001|90094|90008|650057|90093)|admin/i.test(m) && !/AADSTS65004/.test(m);
+    var admin = InlookAuth.isAdminErr(e);
     var cancelled = /user_cancelled|AADSTS65004|popup_window_error|empty_window/i.test(m + (e && e.errorCode || ""));
-    var kind = admin ? "KRÄVER ADMINISTRATÖR" : cancelled ? "avbröts/popup blockerad" : "fel";
+    var kind = admin ? "KRÄVER ADMINISTRATÖR" : /AADSTS65001|consent_required/i.test(m) ? "medgivande saknas (ej bekräftat admin)" : cancelled ? "avbröts/popup blockerad" : "fel";
     return kind + " (" + (code || (e && e.errorCode) || "okänd kod") + ")";
   }
 
