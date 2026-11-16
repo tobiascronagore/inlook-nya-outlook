@@ -7,8 +7,13 @@ COM, ingen IT-inblandning. Det kan finnas parallellt med det lokala tillägget
 
 Adress: https://tobiascronagore.github.io/inlook-nya-outlook/
 
-Data: anteckningar och dagbok som JSON i OneDrive-mappen `Inlook`, uppgifter i
-Microsoft To Do. Ingenting ligger i det här repot.
+Data: uppgifter (`tasks.json`), anteckningar (`notes.json`) och dagbok
+(`dagbok.json`) som JSON i OneDrive-mappen `Inlook`. Ingenting ligger i det här repot.
+
+Behörigheter (provade i Skandglas tenant): User.Read, Files.ReadWrite, Notes.Read/ReadWrite
+fungerar utan admin. Microsoft To Do (Tasks.ReadWrite), Mail.* och Calendars.* kräver
+administratör och används därför INTE. Kalender i tillägget utgår tills vidare av samma skäl;
+mejlet läses bara via Office.js. Inloggningen sker via en Office-dialog (NAA ger bridge-fel här).
 
 ## Steg 1 - Lägg till SPA-plattform i appregistreringen (du, i Entra-portalen)
 
@@ -51,8 +56,9 @@ spärrad för dig är det en gräns jag inte ska gå runt; säg till så tar vi 
 
 ## Steg 4 - Använda tillägget
 
-- **Mejl**: skapa uppgift (Jobb/Privat, med länk till mejlet) eller spara en
-  snabbanteckning. Välj vilka To Do-listor Jobb/Privat betyder under Inställningar.
+- **Mejl**: skapa uppgift (Jobb/Privat, förfallodatum valfritt, länk till mejlet) eller spara en
+  snabbanteckning.
+- **Uppgifter**: egen lista (filtrera Jobb/Privat, kryssa klart, ta bort).
 - **Anteckningar**: lista, ta bort, och engångsimport av `notes.json` /
   `dagbok.json` (finns i `desktop\.data` i den gamla Inlook) via **Välj fil**.
 

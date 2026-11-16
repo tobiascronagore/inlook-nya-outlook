@@ -2,7 +2,6 @@
 (function () {
   var cfg = window.INLOOK_CONFIG;
   var BASE = "https://graph.microsoft.com/v1.0";
-  var S_TASKS = ["Tasks.ReadWrite"];
   var S_FILES = ["Files.ReadWrite"];
 
   // Ett anrop med en enda omförsök vid strypning (429/503): hellre få anrop.
@@ -33,30 +32,6 @@
     var err = new Error(what + " misslyckades (" + res.status + ")" + (txt ? ": " + txt : ""));
     err.status = res.status;
     throw err;
-  }
-
-  // ---------- To Do ----------
-  async function todoLists() {
-    var res = await mustOk(await call(S_TASKS, "GET", "/me/todo/lists"), "Hämta listor");
-    return (await res.json()).value || [];
-  }
-
-  async function createTask(listId, title, bodyText, link) {
-    var res = await mustOk(await call(S_TASKS, "POST",
-      "/me/todo/lists/" + encodeURIComponent(listId) + "/tasks",
-      { json: { title: title, body: { content: bodyText || "", contentType: "text" } } }),
-      "Skapa uppgift");
-    var task = await res.json();
-    if (link) {
-      // Länk till mejlet som riktig "länkad resurs" så den syns i To Do.
-      // Misslyckas den är uppgiften ändå skapad (länken står också i texten).
-      try {
-        await call(S_TASKS, "POST",
-          "/me/todo/lists/" + encodeURIComponent(listId) + "/tasks/" + task.id + "/linkedResources",
-          { json: { webUrl: link, applicationName: "Outlook", displayName: "Öppna mejlet" } });
-      } catch (e) { /* ignoreras medvetet */ }
-    }
-    return task;
   }
 
   // ---------- OneDrive-JSON ----------
@@ -153,10 +128,61 @@
     return added;
   }
 
+  // ---------- Uppgifter (egen lista i tasks.json, ingen To Do/Tasks-behörighet) ----------
+  // Post: {id, title, kind: "jobb"|"privat", done, due: "YYYY-MM-DD"|"", link, notes, created, updated, doneAt}
+  async function loadTasks() {
+    var r = await readJson("tasks.json");
+    return Array.isArray(r.data) ? r.data : [];
+  }
+
+  async function mutateTasks(fn) {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var r = await readJson("tasks.json");
+      var list = fn(Array.isArray(r.data) ? r.data : []);
+      try { await writeJson("tasks.json", list, r.etag); return list; }
+      catch (e) { if (e.status !== 412 || attempt === 1) throw e; }
+    }
+  }
+
+  function addTask(t) {
+    return mutateTasks(function (list) {
+      list.push({ id: newId(), title: t.title || "(namnlös)", kind: t.kind === "privat" ? "privat" : "jobb",
+        done: false, due: t.due || "", link: t.link || "", notes: t.notes || "",
+        created: nowStamp(), updated: nowStamp(), doneAt: "" });
+      return list;
+    });
+  }
+
+  function updateTask(id, patch) {
+    return mutateTasks(function (list) {
+      list.forEach(function (x) {
+        if (x.id !== id) return;
+        Object.assign(x, patch, { updated: nowStamp() });
+        x.doneAt = x.done ? (x.doneAt || nowStamp()) : "";
+      });
+      return list;
+    });
+  }
+
+  function deleteTask(id) {
+    return mutateTasks(function (list) { return list.filter(function (x) { return x.id !== id; }); });
+  }
+
+  // Engångsimport från en tasks.json med samma fält; slår ihop på id.
+  async function importTasks(incoming) {
+    var added = 0;
+    await mutateTasks(function (list) {
+      var have = {}; list.forEach(function (x) { have[x.id] = true; });
+      incoming.forEach(function (x) { if (x && x.id && x.title && !have[x.id]) { list.push(x); added++; } });
+      return list;
+    });
+    return added;
+  }
+
   window.InlookGraph = {
-    todoLists: todoLists, createTask: createTask,
     readJson: readJson, writeJson: writeJson, deleteFile: deleteFile,
     loadNotes: loadNotes, addNote: addNote, deleteNote: deleteNote, importNotes: importNotes,
+    loadTasks: loadTasks, addTask: addTask, updateTask: updateTask, deleteTask: deleteTask, importTasks: importTasks,
     call: call
   };
 })();

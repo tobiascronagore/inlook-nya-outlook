@@ -29,28 +29,13 @@
   // Varje test: namn, scope, och en funktion som visar att token faktiskt fungerar.
   var tests = [
     { n: "User.Read", s: ["User.Read"], f: async function () { return (await G(["User.Read"], "GET", "/me?$select=id")).status; } },
-    { n: "Tasks.ReadWrite (läs+skriv)", s: ["Tasks.ReadWrite"], f: async function () {
-        var r = await G(["Tasks.ReadWrite"], "GET", "/me/todo/lists");
-        if (!r.ok) return r.status;
-        var l = (await r.json()).value[0];
-        if (!l) return "inga listor";
-        var c = await G(["Tasks.ReadWrite"], "POST", "/me/todo/lists/" + l.id + "/tasks", { json: { title: "Inlook förprov (raderas)" } });
-        if (!c.ok) return "skriv " + c.status;
-        var t = await c.json();
-        var d = await G(["Tasks.ReadWrite"], "DELETE", "/me/todo/lists/" + l.id + "/tasks/" + t.id);
-        return "läs 200, skapa " + c.status + ", radera " + d.status;
-      } },
     { n: "Files.ReadWrite (OneDrive)", s: ["Files.ReadWrite"], f: async function () {
         var w = await InlookGraph.writeJson("_diag.json", { test: true }, null);
         await InlookGraph.deleteFile("_diag.json");
         return "skriv+radera OK";
       } },
-    { n: "Mail.Read", s: ["Mail.Read"], f: async function () { return (await G(["Mail.Read"], "GET", "/me/messages?$top=1&$select=id")).status; } },
-    { n: "Mail.ReadWrite", s: ["Mail.ReadWrite"], f: async function () { return (await G(["Mail.ReadWrite"], "GET", "/me/messages?$top=1&$select=id")).status; } },
     { n: "Notes.Read", s: ["Notes.Read"], f: async function () { return (await G(["Notes.Read"], "GET", "/me/onenote/notebooks?$top=1&$select=id")).status; } },
-    { n: "Notes.ReadWrite", s: ["Notes.ReadWrite"], f: async function () { return (await G(["Notes.ReadWrite"], "GET", "/me/onenote/notebooks?$top=1&$select=id")).status; } },
-    { n: "Calendars.Read", s: ["Calendars.Read"], f: async function () { return (await G(["Calendars.Read"], "GET", "/me/calendars?$top=1&$select=id")).status; } },
-    { n: "Calendars.ReadWrite", s: ["Calendars.ReadWrite"], f: async function () { return (await G(["Calendars.ReadWrite"], "GET", "/me/calendars?$top=1&$select=id")).status; } }
+    { n: "Notes.ReadWrite", s: ["Notes.ReadWrite"], f: async function () { return (await G(["Notes.ReadWrite"], "GET", "/me/onenote/notebooks?$top=1&$select=id")).status; } }
   ];
 
   function setDis(v) { ["run", "run1"].forEach(function (i) { if ($(i)) $(i).disabled = v; }); }

@@ -5,17 +5,18 @@
 <meta http-equiv="Cache-Control" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Inlook</title>
-<link rel="stylesheet" href="css/taskpane.css?v=20261116c">
+<link rel="stylesheet" href="css/taskpane.css?v=20261116d">
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-<script src="vendor/msal-browser.min.js?v=20261116c"></script>
-<script src="js/config.js?v=20261116c"></script>
-<script src="js/auth.js?v=20261116c"></script>
-<script src="js/graph.js?v=20261116c"></script>
-<script src="js/taskpane.js?v=20261116c" defer></script>
+<script src="vendor/msal-browser.min.js?v=20261116d"></script>
+<script src="js/config.js?v=20261116d"></script>
+<script src="js/auth.js?v=20261116d"></script>
+<script src="js/graph.js?v=20261116d"></script>
+<script src="js/taskpane.js?v=20261116d" defer></script>
 </head>
 <body>
 <div class="tabs">
   <button class="tab active" data-tab="mail">Mejl</button>
+  <button class="tab" data-tab="tasks">Uppgifter</button>
   <button class="tab" data-tab="notes">Anteckningar</button>
   <button class="tab" data-tab="settings">Inställningar</button>
 </div>
@@ -33,6 +34,8 @@
     <label class="check"><input type="radio" name="kind" value="jobb" checked> Jobb</label>
     <label class="check"><input type="radio" name="kind" value="privat"> Privat</label>
     <input id="task-title" type="text" placeholder="Rubrik">
+    <div class="label">Förfallodatum (valfritt)</div>
+    <input id="task-due" type="date">
     <button id="btn-task">Skapa uppgift (med länk till mejlet)</button>
   </section>
   <section>
@@ -47,25 +50,36 @@
   <ul id="notes" class="notes"></ul>
   <section>
     <div class="label">Importera från gamla Inlook (engångs)</div>
-    <div class="muted">Välj <code>notes.json</code> eller <code>dagbok.json</code> från mappen <code>desktop\.data</code>.</div>
+    <div class="muted">Välj <code>notes.json</code>, <code>dagbok.json</code> eller en <code>tasks.json</code> från mappen <code>desktop\.data</code>.</div>
     <input id="import-file" type="file" accept=".json,application/json">
     <button id="btn-import" class="secondary">Importera vald fil</button>
   </section>
 </div>
 
-<div id="tab-settings" class="pane" hidden>
+<div id="tab-tasks" class="pane" hidden>
   <section>
-    <button id="btn-lists">Logga in och hämta listor</button>
-    <div class="label">Lista för Jobb</div>
-    <select id="list-jobb"></select>
-    <div class="label">Lista för Privat</div>
-    <select id="list-privat"></select>
-    <div class="muted">Listorna är dina vanliga Microsoft To Do-listor.</div>
+    <label class="check"><input type="radio" name="filt" value="alla" checked> Alla</label>
+    <label class="check"><input type="radio" name="filt" value="jobb"> Jobb</label>
+    <label class="check"><input type="radio" name="filt" value="privat"> Privat</label>
+    <label class="check"><input type="checkbox" id="show-done"> Visa klara</label>
+    <button id="btn-tasks-reload" class="secondary">Ladda om</button>
+    <ul id="tasks" class="notes"></ul>
   </section>
   <section>
-    <a href="diag.html?v=20261116c">Förprov: behörigheter och inloggning</a>
+    <div class="label">Ny uppgift utan mejl</div>
+    <input id="nt-title" type="text" placeholder="Rubrik">
+    <button id="btn-nt">Lägg till</button>
   </section>
 </div>
-<div class="muted" id="ver">Version 20261116c</div>
+
+<div id="tab-settings" class="pane" hidden>
+  <section>
+    <div class="muted">Uppgifter och anteckningar sparas som JSON i din OneDrive-mapp <code>Inlook</code>. Kalender och mejl-behörigheter används inte (kräver administratör).</div>
+  </section>
+  <section>
+    <a href="diag.html?v=20261116d">Förprov: behörigheter och inloggning</a>
+  </section>
+</div>
+<div class="muted" id="ver">Version 20261116d</div>
 </body>
 </html>

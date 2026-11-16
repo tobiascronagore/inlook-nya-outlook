@@ -48,53 +48,63 @@
     $("task-title").value = current.subject;
   }
 
-  function listFor(kind) {
-    var saved = {};
-    try { saved = JSON.parse(localStorage.getItem("inlook.lists") || "{}"); } catch (e) { /* tom */ }
-    if (saved[kind] && lists.some(function (l) { return l.id === saved[kind]; })) return saved[kind];
-    var found;
-    if (kind === "privat") found = lists.find(function (l) { return /priv/i.test(l.displayName); });
-    else found = lists.find(function (l) { return l.wellknownListName === "defaultList"; });
-    return (found || lists[0] || {}).id;
-  }
-
-  function fillSelect(sel, kind) {
-    sel.innerHTML = "";
-    lists.forEach(function (l) {
-      var o = document.createElement("option");
-      o.value = l.id; o.textContent = l.displayName; sel.appendChild(o);
-    });
-    sel.value = listFor(kind);
-    sel.onchange = function () {
-      var saved = {};
-      try { saved = JSON.parse(localStorage.getItem("inlook.lists") || "{}"); } catch (e) { /* tom */ }
-      saved[kind] = sel.value;
-      localStorage.setItem("inlook.lists", JSON.stringify(saved));
-    };
-  }
-
-  async function ensureLists() {
-    if (lists.length) return;
-    lists = await InlookGraph.todoLists();
-    fillSelect($("list-jobb"), "jobb");
-    fillSelect($("list-privat"), "privat");
-  }
-
   async function onTask() {
     var btn = $("btn-task"); btn.disabled = true;
     try {
-      status("Skapar uppgift…");
-      await ensureLists();
+      status("Sparar uppgift…");
       var kind = document.querySelector("input[name=kind]:checked").value;
-      var listId = listFor(kind);
-      if (!listId) throw new Error("Hittade ingen To Do-lista.");
       var title = $("task-title").value.trim() || current.subject || "(namnlös)";
-      var body = "Från mejl: " + current.subject + (current.from ? "\nAvsändare: " + current.from : "") +
-        (current.link ? "\nÖppna mejlet: " + current.link : "");
-      await InlookGraph.createTask(listId, title, body, current.link);
-      status("Uppgiften skapades i " + (kind === "privat" ? "Privat" : "Jobb") + ".", "ok");
+      await InlookGraph.addTask({ title: title, kind: kind, due: $("task-due").value, link: current.link,
+        notes: "Från mejl: " + current.subject + (current.from ? "\nAvsändare: " + current.from : "") });
+      status("Uppgiften sparades i " + (kind === "privat" ? "Privat" : "Jobb") + ".", "ok");
     } catch (e) { fail(e); }
     btn.disabled = false;
+  }
+
+  var allTasks = [];
+  function renderTasks() {
+    var ul = $("tasks"); ul.innerHTML = "";
+    var f = document.querySelector("input[name=filt]:checked").value, showDone = $("show-done").checked;
+    var list = allTasks.filter(function (t) { return (f === "alla" || t.kind === f) && (showDone || !t.done); });
+    list.sort(function (a, b) { return (a.due || "9999").localeCompare(b.due || "9999") || (b.created || "").localeCompare(a.created || ""); });
+    if (!list.length) { ul.innerHTML = "<li class='muted'>Inga uppgifter.</li>"; return; }
+    list.forEach(function (t) {
+      var li = document.createElement("li");
+      var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!t.done;
+      cb.onchange = async function () {
+        try { allTasks = await InlookGraph.updateTask(t.id, { done: cb.checked }); renderTasks(); } catch (e) { fail(e); }
+      };
+      var tt = document.createElement("span"); tt.className = "t"; tt.textContent = " " + t.title;
+      if (t.done) tt.style.textDecoration = "line-through";
+      var m = document.createElement("div"); m.className = "muted";
+      m.textContent = (t.kind === "privat" ? "Privat" : "Jobb") + (t.due ? " · förfaller " + t.due : "");
+      li.append(cb, tt, m);
+      if (t.link && /^https:/i.test(t.link)) {
+        var a = document.createElement("a"); a.href = t.link; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Öppna mejlet"; li.appendChild(a);
+      }
+      var d = document.createElement("button"); d.className = "del"; d.textContent = "Ta bort";
+      d.onclick = async function () {
+        if (d.dataset.armed !== "1") { d.dataset.armed = "1"; d.textContent = "Klicka igen för att ta bort"; return; }
+        try { allTasks = await InlookGraph.deleteTask(t.id); renderTasks(); } catch (e) { fail(e); }
+      };
+      li.appendChild(d);
+      ul.appendChild(li);
+    });
+  }
+
+  async function loadTasks() {
+    try { status("Läser uppgifter…"); allTasks = await InlookGraph.loadTasks(); renderTasks(); status(""); }
+    catch (e) { fail(e); }
+  }
+
+  async function onNewTask() {
+    var title = $("nt-title").value.trim();
+    if (!title) { status("Skriv en rubrik.", "err"); return; }
+    try {
+      var kind = document.querySelector("input[name=filt]:checked").value;
+      allTasks = await InlookGraph.addTask({ title: title, kind: kind === "privat" ? "privat" : "jobb" });
+      $("nt-title").value = ""; renderTasks(); status("Tillagd.", "ok");
+    } catch (e) { fail(e); }
   }
 
   async function onNote() {
@@ -155,12 +165,15 @@
         }
         await InlookGraph.writeJson("dagbok.json", data, cur.etag);
         status("dagbok.json importerad till OneDrive/Inlook.", "ok");
+      } else if (/tasks/i.test(f.name) && Array.isArray(data)) {
+        var nt = await InlookGraph.importTasks(data);
+        status(nt + " uppgifter importerade.", "ok");
       } else if (/notes/i.test(f.name) && Array.isArray(data)) {
         var n = await InlookGraph.importNotes(data);
         status(n + " anteckningar importerade (befintliga lämnades orörda).", "ok");
         loadNotes();
       } else {
-        status("Okänd fil. Välj notes.json eller dagbok.json.", "err");
+        status("Okänd fil. Välj notes.json, dagbok.json eller tasks.json.", "err");
       }
       $("btn-import").dataset.armed = "";
     } catch (e) { fail(e); }
@@ -168,9 +181,10 @@
 
   function showTab(name) {
     document.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === name); });
-    ["mail", "notes", "settings"].forEach(function (t) { $("tab-" + t).hidden = (t !== name); });
+    ["mail", "tasks", "notes", "settings"].forEach(function (t) { $("tab-" + t).hidden = (t !== name); });
     status("");
     if (name === "notes") loadNotes();
+    if (name === "tasks") loadTasks();
   }
 
   Office.onReady(function () {
@@ -178,9 +192,10 @@
     $("btn-task").onclick = onTask;
     $("btn-note").onclick = onNote;
     $("btn-reload").onclick = loadNotes;
-    $("btn-lists").onclick = async function () {
-      try { status("Loggar in och hämtar listor…"); await ensureLists(); status("Listor hämtade.", "ok"); } catch (e) { fail(e); }
-    };
+    $("btn-tasks-reload").onclick = loadTasks;
+    $("btn-nt").onclick = onNewTask;
+    $("show-done").onchange = renderTasks;
+    document.querySelectorAll("input[name=filt]").forEach(function (r) { r.onchange = renderTasks; });
     $("btn-import").onclick = onImport;
     readItem();
     // Fastnålad panel: uppdatera när användaren byter mejl.

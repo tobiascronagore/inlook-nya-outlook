@@ -56,7 +56,7 @@
       if (!(window.Office && Office.context && Office.context.ui && Office.context.ui.displayDialogAsync)) {
         return reject(new Error("Office Dialog API finns inte här."));
       }
-      var url = DIALOG_URL + "?v=20261116c&scopes=" + encodeURIComponent(scopes.join(" "));
+      var url = DIALOG_URL + "?v=20261116d&scopes=" + encodeURIComponent(scopes.join(" "));
       Office.context.ui.displayDialogAsync(url, { height: 60, width: 30 }, function (r) {
         if (r.status !== Office.AsyncResultStatus.Succeeded) {
           return reject(new Error("Dialogen kunde inte öppnas: " + (r.error && r.error.message) + " (kod " + (r.error && r.error.code) + ")"));
@@ -82,30 +82,30 @@
     });
   }
 
-  var naaBroken = false; // sätts om NAA saknas/hänger, så vi inte väntar igen
+  var queue = Promise.resolve(); // Office tillåter bara en dialog i taget
 
   // Token för EXAKT de scopes som anges (inkrementellt medgivande).
   async function getToken(scopes) {
     var key = scopes.slice().sort().join(" ");
-    var c = mem[key];
-    if (c && c.exp - Date.now() > 120000) { lastInfo = { mode: c.mode, scp: c.scp }; return c.token; }
-    var r, mode;
-    if (!naaBroken) {
-      try { r = await withTimeout(viaNaa(scopes), 120000, "NAA"); mode = "NAA"; }
-      catch (e) {
-        if (isAdminErr(e)) throw e;
-        var m = (e && (e.errorMessage || e.message)) || "";
-        // Avbruten av användaren är inget NAA-fel; övriga fel -> fallback.
-        if (/user_cancelled/i.test(e && e.errorCode || "")) throw e;
-        naaBroken = true;
-        lastInfo.naaError = (e && e.errorCode ? e.errorCode + ": " : "") + m;
+    var run = queue.then(async function () {
+      var c = mem[key];
+      if (c && c.exp - Date.now() > 120000) { lastInfo = { mode: c.mode, scp: c.scp }; return c.token; }
+      var r, mode;
+      if (cfg.useNaa) {
+        try { r = await withTimeout(viaNaa(scopes), 120000, "NAA"); mode = "NAA"; }
+        catch (e) {
+          if (isAdminErr(e) || /user_cancelled/i.test(e && e.errorCode || "")) throw e;
+          lastInfo.naaError = (e && e.errorCode ? e.errorCode + ": " : "") + ((e && (e.errorMessage || e.message)) || "");
+        }
       }
-    }
-    if (!r) { r = await viaDialog(scopes); mode = "dialog"; }
-    var scp = decodeScp(r.token);
-    mem[key] = { token: r.token, exp: r.exp, scp: scp, mode: mode };
-    lastInfo = { mode: mode, scp: scp, naaError: lastInfo.naaError };
-    return r.token;
+      if (!r) { r = await viaDialog(scopes); mode = "dialog"; }
+      var scp = decodeScp(r.token);
+      mem[key] = { token: r.token, exp: r.exp, scp: scp, mode: mode };
+      lastInfo = { mode: mode, scp: scp, naaError: lastInfo.naaError };
+      return r.token;
+    });
+    queue = run.catch(function () { /* kön ska fortsätta efter fel */ });
+    return run;
   }
 
   window.InlookAuth = { isAdminErr: isAdminErr, getToken: getToken, getPca: getPca, info: function () { return lastInfo; } };
