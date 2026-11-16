@@ -10,7 +10,7 @@
     tr.innerHTML = "<td></td><td></td>";
     tr.children[0].textContent = name; tr.children[1].textContent = text;
     tr.children[1].style.color = ok ? "var(--ok)" : "var(--err)";
-    $("out").tBodies[0].appendChild(tr);
+    if ($("out") && $("out").tBodies[0]) $("out").tBodies[0].appendChild(tr);
     log(name + ": " + text);
   }
 
@@ -53,9 +53,12 @@
     { n: "Calendars.ReadWrite", s: ["Calendars.ReadWrite"], f: async function () { return (await G(["Calendars.ReadWrite"], "GET", "/me/calendars?$top=1&$select=id")).status; } }
   ];
 
+  function setDis(v) { ["run", "run1"].forEach(function (i) { if ($(i)) $(i).disabled = v; }); }
+
   async function run(only) {
-    $("run").disabled = true; $("run1").disabled = true;
-    $("out").tBodies[0].innerHTML = ""; lines = [];
+    setDis(true);
+    if ($("out") && $("out").tBodies[0]) $("out").tBodies[0].innerHTML = "";
+    lines = [];
     try {
       log("Datum: " + new Date().toISOString().slice(0, 10));
       var inOffice = !!(window.Office && Office.context && Office.context.mailbox);
@@ -89,7 +92,7 @@
       }
       log("Klart. Kopiera hela rapporten ovan.");
     } catch (e) { log("FEL I FÖRPROVET: " + (e && e.message || e)); }
-    $("run").disabled = false; $("run1").disabled = false;
+    setDis(false);
   }
 
   // Alla fel som annars sväljs ska synas i rapporten.
@@ -98,8 +101,9 @@
 
   // Knapparna kopplas direkt, inte först i Office.onReady, som kan utebli.
   function init() {
-    $("run").onclick = function () { run(false); };
-    $("run1").onclick = function () { run(true); };
+    if ($("run")) $("run").onclick = function () { run(false); };
+    if ($("run1")) $("run1").onclick = function () { run(true); };
+    log("Version " + ((document.getElementById("ver") || {}).textContent || "okänd (gammal sida i cache?)"));
     log("Sidan laddad. msal: " + (typeof msal) + ", Office: " + (typeof Office));
     if (window.Office && Office.onReady) {
       var t = setTimeout(function () { log("Office.onReady kom inte inom 5 s (fortsätter ändå)."); }, 5000);
