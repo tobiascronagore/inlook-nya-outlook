@@ -56,7 +56,7 @@
       if (!(window.Office && Office.context && Office.context.ui && Office.context.ui.displayDialogAsync)) {
         return reject(new Error("Office Dialog API finns inte här."));
       }
-      var url = DIALOG_URL + "?v=20261116f&scopes=" + encodeURIComponent(scopes.join(" "));
+      var url = DIALOG_URL + "?v=20261116g&scopes=" + encodeURIComponent(scopes.join(" "));
       Office.context.ui.displayDialogAsync(url, { height: 60, width: 30 }, function (r) {
         if (r.status !== Office.AsyncResultStatus.Succeeded) {
           return reject(new Error("Dialogen kunde inte öppnas: " + (r.error && r.error.message) + " (kod " + (r.error && r.error.code) + ")"));

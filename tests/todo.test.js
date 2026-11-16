@@ -60,19 +60,19 @@ const step = ms => { clock += ms; };
   assert.equal(Object.keys(drive).filter(k => k.startsWith("inkorg/cmd-")).length, 1);
   const cmd = JSON.parse(drive[Object.keys(drive).find(k => k.startsWith("inkorg/"))].content);
   assert.deepEqual(Object.keys(cmd).sort(), ["action", "body", "createdAt", "dueDateTime", "id", "importance", "listId", "listName", "title"]);
-  st = await T.load(); let rows = T.buildRows(st.todo, st.pending);
-  assert.equal(rows.length, 1); assert.ok(rows[0].isNew && /Väntar på synk/.test(rows[0].badge)); assert.equal(rows[0].due, "2026-11-20");
+  st = await T.load(); let rows = T.buildRows(st.todo, st.pending, {}, st.created);
+  assert.equal(rows.length, 1); assert.ok(rows[0].isNew && rows[0].badge === "Synkas…" && !rows[0].ok); assert.equal(rows[0].due, "2026-11-20");
   assert.equal(rows[0].link, "https://outlook.office.com/owa/?ItemID=a%3D&exvsurl=1");
 
   // 2. Flöde 1 körs, flöde 2 ännu inte: bearbetat men väntar fortfarande
   step(60000); flow1();
-  st = await T.load(); rows = T.buildRows(st.todo, st.pending);
-  assert.equal(rows.length, 1); assert.ok(/Bearbetad/.test(rows[0].badge));
+  st = await T.load(); rows = T.buildRows(st.todo, st.pending, {}, st.created);
+  assert.equal(rows.length, 1); assert.ok(rows[0].isNew && rows[0].ok && rows[0].badge === ""); // tasks tom i todo.json: finns kvar lokalt
 
   // 3. Flöde 2 körs: kommandot är löst, uppgiften kommer från todo.json
   step(60000); flow2(); step(1000);
-  st = await T.load(); rows = T.buildRows(st.todo, st.pending);
-  assert.equal(st.pending.length, 0); assert.equal(rows.length, 1); assert.ok(!rows[0].isNew && !rows[0].badge && rows[0].id === "T1");
+  st = await T.load(); rows = T.buildRows(st.todo, st.pending, {}, st.created);
+  assert.equal(st.pending.length, 0); assert.equal(st.created.length, 0); assert.equal(rows.length, 1); assert.ok(!rows[0].isNew && !rows[0].badge && rows[0].id === "T1");
 
   // 4. Bocka av: optimistiskt + väntar, sedan klart
   await T.send({ action: "complete", todoId: "T1", listId: "L1" });
@@ -95,8 +95,18 @@ const step = ms => { clock += ms; };
   // 6. Flödet står still: "ovanligt länge" efter 15 min; tas bort efter 2 dygn
   await T.send({ action: "create", listId: "L2", listName: "Privat", title: "Fastnad" });
   step(16 * 60000); st = await T.load();
-  assert.ok(/ovanligt länge/.test(T.buildRows(st.todo, st.pending)[0].badge));
+  assert.ok(/ovanligt länge/.test(T.buildRows(st.todo, st.pending, {}, st.created)[0].badge));
   step(2 * 86400000); st = await T.load(); assert.equal(st.pending.length, 0);
+
+  // 6b. Optimistisk uppgift överlever todo.json utan tasks, och dedupas först när en matchande uppgift finns
+  assert.equal(st.created.length, 1);
+  const c0 = st.created[0];
+  let td = { generatedAt: now(), lists: toDo.lists, tasks: [{ id: "OLD", listId: c0.listId, title: c0.title, status: "notStarted", createdAt: "2026-01-01T00:00:00Z" }] };
+  assert.equal(T.updateCreated(st.created, td, {}, clock).length, 1); // äldre uppgift med samma rubrik räknas inte
+  td.tasks[0].createdAt = now();
+  assert.equal(T.updateCreated(st.created, td, {}, clock).length, 0);
+  td.tasks[0] = { id: "X", listId: "L1", title: c0.title }; assert.equal(T.updateCreated(st.created, td, {}, clock).length, 1);
+  step(8 * 86400000); st = await T.load(); assert.equal(st.created.length, 0); // 7 dygn
 
   // 7. Listfilter + tom todo.json
   assert.equal(T.buildRows(st.todo, [], { listId: "L2" }).length, 0);

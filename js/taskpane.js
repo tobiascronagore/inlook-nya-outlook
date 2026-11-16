@@ -47,7 +47,13 @@
     $("task-title").value = current.subject;
   }
 
-  var todoState = { todo: null, pending: [] };
+  var todoState = { todo: null, pending: [], created: [] };
+
+  // Efter ett lokalt kommando: läs om väntande/skapade utan nätverksanrop.
+  function localRefresh() {
+    todoState.pending = InlookTodo.resolvePending(InlookTodo.loadPending(), todoState.todo, {}, Date.now());
+    todoState.created = InlookTodo.loadCreated();
+  }
 
   function lists() { return (todoState.todo && todoState.todo.lists) || []; }
 
@@ -87,14 +93,19 @@
       await InlookTodo.send({ action: "create", listId: listId, listName: $("task-list").selectedOptions[0].textContent,
         title: title, dueDateTime: due ? due + "T00:00:00Z" : "",
         body: (current.link ? "Öppna mejlet: " + current.link + "\n\n" : "") + "Från mejl: " + current.subject + (current.from ? "\nAvsändare: " + current.from : "") });
-      status("Uppgiften skickades. Den hamnar i To Do inom några minuter (väntar på synk).", "ok");
+      localRefresh();
+      status("Uppgiften skapades och synkas till To Do inom några minuter.", "ok");
+      var dn = $("task-done"); dn.innerHTML = "";
+      var lk = document.createElement("a"); lk.href = "#"; lk.textContent = "Visa i Uppgifter";
+      lk.onclick = function (ev) { ev.preventDefault(); showTab("tasks"); };
+      dn.append("Skapad: " + title + " ", lk);
     } catch (e) { fail(e); }
     btn.disabled = false;
   }
 
   function renderTasks() {
     var ul = $("tasks"); ul.innerHTML = "";
-    var rows = InlookTodo.buildRows(todoState.todo, todoState.pending, { listId: $("filt-list").value, showDone: $("show-done").checked });
+    var rows = InlookTodo.buildRows(todoState.todo, todoState.pending, { listId: $("filt-list").value, showDone: $("show-done").checked }, todoState.created);
     if (!rows.length) { ul.innerHTML = "<li class='muted'>Inga uppgifter.</li>"; return; }
     rows.forEach(function (t) {
       var li = document.createElement("li");
@@ -103,7 +114,7 @@
         cb.disabled = true;
         try {
           await InlookTodo.send({ action: cb.checked ? "complete" : "reopen", todoId: t.id, listId: t.listId, title: t.title });
-          todoState.pending = InlookTodo.resolvePending(InlookTodo.loadPending(), todoState.todo, {}, Date.now());
+          localRefresh();
           renderTasks(); status("Skickat, väntar på synk.", "ok");
         } catch (e) { cb.checked = !cb.checked; cb.disabled = false; fail(e); }
       };
@@ -112,7 +123,9 @@
       var m = document.createElement("div"); m.className = "muted";
       m.textContent = (t.listName || "") + (t.due ? " · förfaller " + t.due : "") + (t.gone ? " · tas bort" : "");
       li.append(cb, tt, m);
-      if (t.badge) { var bd = document.createElement("div"); bd.className = "badge"; bd.textContent = "Väntar: " + t.badge; li.appendChild(bd); }
+      if (t.ok) { var okd = document.createElement("div"); okd.className = "muted"; okd.textContent = "I To Do ✓"; li.appendChild(okd); }
+      if (t.isNew && t.note) { var nt = document.createElement("div"); nt.className = "muted"; nt.textContent = t.note; li.appendChild(nt); }
+      if (t.badge) { var bd = document.createElement("div"); bd.className = "badge"; bd.textContent = t.badge; li.appendChild(bd); }
       if (t.link && /^https:/i.test(t.link)) {
         var a = document.createElement("a"); a.href = t.link; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Öppna mejlet"; li.appendChild(a);
       }
@@ -122,7 +135,7 @@
           if (d.dataset.armed !== "1") { d.dataset.armed = "1"; d.textContent = "Klicka igen för att ta bort"; return; }
           try {
             await InlookTodo.send({ action: "delete", todoId: t.id, listId: t.listId, title: t.title });
-            todoState.pending = InlookTodo.resolvePending(InlookTodo.loadPending(), todoState.todo, {}, Date.now());
+            localRefresh();
             renderTasks(); status("Borttagning skickad, väntar på synk.", "ok");
           } catch (e) { fail(e); }
         };
@@ -145,8 +158,8 @@
       if (!sel.value) throw new Error("Inga To Do-listor hittades. Flödet \"To Do till Inlook\" måste ha körts först.");
       await InlookTodo.send({ action: "create", listId: sel.value, listName: sel.selectedOptions[0].textContent, title: title, body: "" });
       $("nt-title").value = "";
-      todoState.pending = InlookTodo.resolvePending(InlookTodo.loadPending(), todoState.todo, {}, Date.now());
-      renderTasks(); status("Skickad, väntar på synk.", "ok");
+      localRefresh();
+      renderTasks(); status("Uppgiften visas överst i listan och synkas till To Do.", "ok");
     } catch (e) { fail(e); }
   }
 

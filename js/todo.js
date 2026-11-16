@@ -7,6 +7,7 @@
   var KEY = "inlook.pending.v1";
   var DAY = 86400000;
   var STUCK_MS = 15 * 60 * 1000;
+  var CKEY = "inlook.created.v1";
 
   // ---------- Ren logik (testas i tests/) ----------
 
@@ -31,7 +32,7 @@
   }
 
   // Rader att visa: uppgifter från todo.json med väntande kommandon pålagda.
-  function buildRows(todo, pending, opts) {
+  function buildRows(todo, pending, opts, created) {
     opts = opts || {};
     var lists = (todo && todo.lists) || [];
     var names = {};
@@ -52,18 +53,19 @@
         done: done, due: (t.dueDateTime || "").slice(0, 10), link: firstLink(t.body), badge: badge,
         gone: gone, pending: !!p, created: t.createdAt || "" });
     });
-    pending.forEach(function (p) {
-      if (p.action !== "create") return;
-      rows.push({ id: "", cmdId: p.id, listId: p.listId, listName: p.listName || names[p.listId] || "", title: p.title,
-        done: false, due: (p.dueDateTime || "").slice(0, 10), link: firstLink(p.body), gone: false, pending: true, isNew: true,
-        badge: p.processed ? "Bearbetad, väntar på nästa synk" : (p.stuck ? "Väntar på synk (ovanligt länge, kontrollera flödet)" : "Väntar på synk"),
-        created: p.createdAt || p.sentAt });
+    // Lokalt skapade uppgifter visas direkt (optimistiskt) tills todo.json innehåller dem.
+    (created || []).forEach(function (c) {
+      var stuck = !c.receipt && Date.now() - Date.parse(c.sentAt) > STUCK_MS;
+      rows.push({ id: "", cmdId: c.id, listId: c.listId, listName: c.listName || names[c.listId] || "", title: c.title,
+        done: false, due: (c.dueDateTime || "").slice(0, 10), link: firstLink(c.body), gone: false, pending: !c.receipt, isNew: true,
+        badge: c.receipt ? "" : (stuck ? "Synkas… (ovanligt länge, kontrollera flödet)" : "Synkas…"),
+        ok: !!c.receipt, note: "Kan bockas av i To Do tills synken är klar.", created: c.createdAt || c.sentAt });
     });
     rows = rows.filter(function (r) {
       return (!opts.listId || r.listId === opts.listId) && (opts.showDone || !r.done || r.pending);
     });
     rows.sort(function (a, b) {
-      return (a.done - b.done) || (a.due || "9999").localeCompare(b.due || "9999") || (b.created || "").localeCompare(a.created || "");
+      return (a.done - b.done) || ((b.isNew ? 1 : 0) - (a.isNew ? 1 : 0)) || (a.due || "9999").localeCompare(b.due || "9999") || (b.created || "").localeCompare(a.created || "");
     });
     return rows;
   }
@@ -83,6 +85,25 @@
     try { root.localStorage.setItem(KEY, JSON.stringify(list)); } catch (e) { /* ingen lagring */ }
   }
 
+  // Lokalt skapade uppgifter: behålls tills todo.json har en uppgift med samma lista och rubrik
+  // (skapad efter kommandot) eller i högst 7 dygn. Undviker dubbletter när tasks väl fylls.
+  function loadCreated() {
+    try { return JSON.parse(root.localStorage.getItem(CKEY) || "[]"); } catch (e) { return []; }
+  }
+  function saveCreated(list) {
+    try { root.localStorage.setItem(CKEY, JSON.stringify(list)); } catch (e) { /* ingen lagring */ }
+  }
+  function updateCreated(created, todo, receipts, now) {
+    var tasks = (todo && todo.tasks) || [];
+    return created.filter(function (c) {
+      if (now - Date.parse(c.sentAt) > 7 * DAY) return false;
+      var from = Date.parse(c.createdAt) - 2 * 60000;
+      return !tasks.some(function (t) {
+        return t.listId === c.listId && t.title === c.title && (!t.createdAt || !(Date.parse(t.createdAt) < from));
+      });
+    }).map(function (c) { return Object.assign({}, c, { receipt: c.receipt || !!receipts[c.id] }); });
+  }
+
   // ---------- OneDrive ----------
   async function send(cmd) {
     var G = root.InlookGraph;
@@ -92,6 +113,12 @@
     list.push({ id: cmd.id, action: cmd.action, todoId: cmd.todoId || "", listId: cmd.listId || "", listName: cmd.listName || "",
       title: cmd.title || "", body: cmd.body || "", dueDateTime: cmd.dueDateTime || "", createdAt: cmd.createdAt, sentAt: new Date().toISOString() });
     savePending(list);
+    if (cmd.action === "create") {
+      var cr = loadCreated();
+      cr.push({ id: cmd.id, listId: cmd.listId || "", listName: cmd.listName || "", title: cmd.title || "", body: cmd.body || "",
+        dueDateTime: cmd.dueDateTime || "", createdAt: cmd.createdAt, sentAt: new Date().toISOString(), receipt: false });
+      saveCreated(cr);
+    }
     return cmd;
   }
 
@@ -107,14 +134,17 @@
       if (m) receipts[m[1]] = f.modified;
     });
     var pending = resolvePending(loadPending(), todo, receipts, now);
+    var created = updateCreated(loadCreated(), todo, receipts, now);
+    saveCreated(created);
     savePending(pending.map(function (p) { var q = Object.assign({}, p); delete q.processed; delete q.stuck; return q; }));
     // Städa gamla kvitton (>3 dygn), högst 10 per laddning.
     var old = files.filter(function (f) { return now - Date.parse(f.modified) > 3 * DAY; }).slice(0, 10);
     for (var i = 0; i < old.length; i++) { try { await G.deleteFile("kvitton/" + old[i].name); } catch (e) { /* nästa gång */ } }
-    return { todo: todo, pending: pending, syncedAt: todo ? todo.generatedAt : "" };
+    return { todo: todo, pending: pending, created: created, syncedAt: todo ? todo.generatedAt : "" };
   }
 
   root.InlookTodo = { resolvePending: resolvePending, buildRows: buildRows, pickList: pickList, firstLink: firstLink,
-    send: send, load: load, loadPending: loadPending, savePending: savePending };
+    send: send, load: load, loadPending: loadPending, savePending: savePending,
+    loadCreated: loadCreated, updateCreated: updateCreated };
   if (typeof module !== "undefined") module.exports = root.InlookTodo;
 })(typeof window !== "undefined" ? window : globalThis);
