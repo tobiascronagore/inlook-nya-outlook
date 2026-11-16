@@ -1,7 +1,6 @@
 // Tilläggets panel: uppgift och anteckning från valt mejl + lista anteckningar.
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var lists = [];
   var current = { subject: "", from: "", link: "" };
 
   function status(msg, kind, details) {
