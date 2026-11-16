@@ -11,11 +11,9 @@
   var mem = {};            // scope-nyckel -> {token, exp, scp}
   var lastInfo = { mode: "", scp: "" };
 
-  function decodeScp(token) {
-    try {
-      var p = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-      return p.scp || "";
-    } catch (e) { return ""; }
+  function decodeClaims(token) {
+    try { return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); }
+    catch (e) { return {}; }
   }
 
   function getPca() {
@@ -56,7 +54,7 @@
       if (!(window.Office && Office.context && Office.context.ui && Office.context.ui.displayDialogAsync)) {
         return reject(new Error("Office Dialog API finns inte här."));
       }
-      var url = DIALOG_URL + "?v=20261116h&scopes=" + encodeURIComponent(scopes.join(" "));
+      var url = DIALOG_URL + "?v=20261116i&scopes=" + encodeURIComponent(scopes.join(" "));
       Office.context.ui.displayDialogAsync(url, { height: 60, width: 30 }, function (r) {
         if (r.status !== Office.AsyncResultStatus.Succeeded) {
           return reject(new Error("Dialogen kunde inte öppnas: " + (r.error && r.error.message) + " (kod " + (r.error && r.error.code) + ")"));
@@ -89,7 +87,7 @@
     var key = scopes.slice().sort().join(" ");
     var run = queue.then(async function () {
       var c = mem[key];
-      if (c && c.exp - Date.now() > 120000) { lastInfo = { mode: c.mode, scp: c.scp }; return c.token; }
+      if (c && c.exp - Date.now() > 120000) { lastInfo = { mode: c.mode, scp: c.scp, aud: c.aud }; return c.token; }
       var r, mode;
       if (cfg.useNaa) {
         try { r = await withTimeout(viaNaa(scopes), 120000, "NAA"); mode = "NAA"; }
@@ -99,9 +97,10 @@
         }
       }
       if (!r) { r = await viaDialog(scopes); mode = "dialog"; }
-      var scp = decodeScp(r.token);
-      mem[key] = { token: r.token, exp: r.exp, scp: scp, mode: mode };
-      lastInfo = { mode: mode, scp: scp, naaError: lastInfo.naaError };
+      var cl = decodeClaims(r.token), scp = cl.scp || "";
+      // aud visar vilken resurs token gäller (Graph eller Exchange); inget annat ur token lämnas ut.
+      mem[key] = { token: r.token, exp: r.exp, scp: scp, aud: cl.aud || "", mode: mode };
+      lastInfo = { mode: mode, scp: scp, aud: cl.aud || "", naaError: lastInfo.naaError };
       return r.token;
     });
     queue = run.catch(function () { /* kön ska fortsätta efter fel */ });
